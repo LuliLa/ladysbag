@@ -30,6 +30,7 @@ public class LexAnalizator {
     }
 
     public List<Lexems> parseLine(String line) {
+        commands.clear();
         currentState = States.START;
         braces = 0;
         char[] chars = line.toCharArray();
@@ -39,7 +40,7 @@ public class LexAnalizator {
             process = analyze(chars[index], index==line.length()-1);
             index++;
         }
-        if (commands.size()>0 && index == line.length()&& braces == 0) {
+        if (commands.size()>0 && process&& braces==0) {
             return commands;
         }
         return null;
@@ -50,63 +51,88 @@ public class LexAnalizator {
             case START: {
                 if (Character.isDigit(ch)) {
                     value += ch;
+                    if (flag){
+                        commands.add(new Lexems(Lexem.NUMBER, Integer.parseInt(value)));
+                    }
+                    return true;
                 }
                 if (ch=='.' && !"".equals(value)) {
                     value += ch;
                     currentState = States.DOUBLE_START;
+                    return true;
+                }
+                if (ch == '(') {
+                    if (commands.size()==0||operators.containsValue(commands.get(commands.size()-1).getLexem())) {
+                        Lexem lexem = whatOperator(ch);
+                        commands.add(new Lexems(lexem, (int) ch));
+                        braces++;
+                        return true;
+                    }
+                }
+                if (ch == ')'&&!"".equals(value)) {
+                    commands.add(new Lexems(Lexem.NUMBER, Integer.valueOf(value)));
+                    value = "";
+                    Lexem lexem = whatOperator(ch);
+                    commands.add(new Lexems(lexem, (int) ch));
+                    braces--;
+                    currentState = States.OPERATOR;
+                    return true;
                 }
                 if (operators.containsKey((int)ch)&&!"".equals(value)) {
                     commands.add(new Lexems(Lexem.NUMBER, Integer.valueOf(value)));
                     value = "";
                     Lexem lexem = whatOperator(ch);
                     commands.add(new Lexems(lexem, (int) ch));
+                    return true;
                 }
-                if (ch == '(') {
-                    Lexem lexem = whatOperator(ch);
-                    commands.add(new Lexems(lexem, (int) ch));
-                    braces++;
-                }
-                if (ch == ')') {
-                    Lexem lexem = whatOperator(ch);
-                    commands.add(new Lexems(lexem, (int) ch));
-                    braces--;
-                    currentState = States.OPERATOR;
-                }
-                if (flag) {
-                    commands.add(new Lexems(Lexem.NUMBER, Integer.parseInt(value)));
-                }
-                return true;
+                break;
             }
             case BRACE_START: {
                if (Character.isDigit(ch)) {
                    value += ch;
                    currentState = States.START;
+                   return true;
                }
-                return true;
+                break;
             }
 
             case DOUBLE_START: {
                 if (Character.isDigit(ch)) {
                     value += ch;
                     currentState = States.DOUBLE_END;
+                    return true;
                 }
-                return true;
+                break;
             }
             case DOUBLE_END: {
                 if (Character.isDigit(ch)) {
                     value += ch;
+                    return true;
                 }
                 if (operators.containsKey((int)ch)) {
                     commands.add(new Lexems(Lexem.NUMBER, Integer.valueOf(value)));
                     value = "";
-                    currentState = States.OPERATOR;
+                    Lexem lexem = whatOperator(ch);
+                    commands.add(new Lexems(lexem, (int) ch));
+                    currentState = States.START;
+                    return true;
                 }
-                return true;
+                break;
+            }
+            case OPERATOR: {
+                if (operators.containsKey((int)ch)) {
+                    Lexem lexem = whatOperator(ch);
+                    commands.add(new Lexems(lexem, (int) ch));
+                    currentState = States.START;
+                    return true;
+                }
+                break;
             }
             default: {
                 return false;
             }
         }
+        return false;
     }
 
     private Lexem whatOperator(char ch) {
@@ -117,7 +143,7 @@ public class LexAnalizator {
 
 enum Lexem{NUMBER, PLUS, MINUS, MULT, DIV, LBRACE, RBRACE, SEMIKOLON};
 
-enum States{START, S0, OPERATOR, BRACE_START, BRACE_END, E0, DOUBLE_START,DOUBLE_END, END};
+enum States{START, OPERATOR, BRACE_START, BRACE_END, DOUBLE_START,DOUBLE_END, NUMBER_START};
 
 class Lexems {
     private Lexem lexem;
